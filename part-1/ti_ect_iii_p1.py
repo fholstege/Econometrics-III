@@ -4,16 +4,9 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy.stats as st
 import statsmodels.api as sm
-import statsmodels.stats.api as sms
-import statsmodels.formula.api as smf
 from statsmodels.tsa.ar_model import AR
-from statsmodels.iolib.summary2 import summary_col
-from sklearn.linear_model import LinearRegression
-from scipy import stats
-from statsmodels.tsa.stattools import adfuller
-import math
+
 
 # Data
 df = pd.read_csv('data_assign_p1.csv')
@@ -33,10 +26,14 @@ sm.graphics.tsa.plot_acf(df['GDP_QGR'], lags=12)
 # PACF plot:
 sm.graphics.tsa.plot_pacf(df['GDP_QGR'], lags=12)
 
-
 ## Question 2:
-
-
-
+# AR(p):
+# model = AR(df['GDP_QGR'])
+# lags = model.select_order(maxlag=15, ic='aic')
+# lags = for loop use G2S!!!!
+# model_fitted = model.fit(lags)
+# params = model_fitted.params
+# print('Parameter information: \n', params)
+# print('Lag length =', lags)
 
 
