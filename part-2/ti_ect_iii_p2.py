@@ -5,8 +5,12 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from statsmodels.tsa.ar_model import AutoReg
 import statsmodels.formula.api as smf
-from statsmodels.tsa.arima_model import ARIMA
+from statsmodels.tsa.stattools import acf
 import itertools
+from operator import itemgetter 
+
+# get rid of scientific notation
+pd.options.display.float_format = '{:.2f}'.format
 
 # Data
 df = pd.read_csv('data_assign_p2.csv')
@@ -37,31 +41,6 @@ axis2.tick_params(axis='y', labelcolor=color2)
 # show together in the same plot
 figure.tight_layout()  
 plt.show()
-
-
-def AR_General2Specific(iMax_lags, fSignificance_level, df, lVariables):
-    '''
-    AR_General2Specific: applies the general to specific approach for finding the appropriate number of lags 
-    '''
-
-    # go through total lags to check
-    for number_lags in range(iMax_lags, 0, -1):
-        AR_Model = AutoReg(df[lVariables], lags=number_lags, trend='c', old_names=False)
-        AR_Model_fitted = AR_Model.fit(use_t=True)
-                
-        # check if significance level is matched by last lag
-        if AR_Model_fitted.pvalues[-1]<=fSignificance_level:
-            result = AR_Model_fitted
-            break
-        else:
-            print('At ' + str(number_lags) +' lags, the last coefficient is not significant at the ' + str(1-fSignificance_level) + ' level')
-
-    return result
-
-
-GDP_AR = AR_General2Specific(4, 0.05, df, ['GDP_QGR'])
-GDP_AR_PARAM = GDP_AR.params
-print('Parameters of the AR model: \n', GDP_AR_PARAM)
 
 
 def lag(x, n):
@@ -118,14 +97,14 @@ def ADL_model(df, sDependent, lIndependent, lLags, exo_adjust = True):
     return(model_fitted)
 
 
-def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndependent):
+def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndependent, nlags_acf = 12):
 
     # get number of variables
     n_vars = len(lIndependent)
 
     # get which vars are exgogenous
     exogenous_var = [x for x in lIndependent if x != sDependent]
-    index_exogenous_var = lIndependent.index(exogenous_var[0])
+    index_exogenous_var = np.where(np.isin(exogenous_var,lIndependent))
 
     #  boolean: while true, continue to try out lags
     one_var_insignificant = True
@@ -136,15 +115,11 @@ def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndepend
 
     for j in range(0, n_vars):
         
-        if j == index_exogenous_var:
-            print("ADDING EXOGENOUS")
+        if j in [index_exogenous_var]:
             exo_lags = [0] + lag_structure
             current_lags.append(exo_lags)
         else:
             current_lags.append(lag_structure)
-
-    print(current_lags)
-    print("888")
 
 
 
@@ -154,13 +129,19 @@ def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndepend
         # run adl model for current iteration
         current_result = ADL_model(df = df, sDependent = sDependent, lIndependent=lIndependent,lLags=current_lags, exo_adjust=False)
 
+        # get the residuals and acf
+        current_result_residuals =  current_result.resid
+        acf_result = acf(current_result_residuals, adjusted = True, nlags = nlags_acf, qstat = True, fft = False)
+        qstat_pval = acf_result[2]
+
+        if min(qstat_pval) <= fSignificance_level:
+            one_var_insignificant = False
+     
         # get the p-values
         result_pvalues = list(current_result.pvalues[1:])
 
         # get largest p-value
         largest_pvalue = max(result_pvalues)
-
-        print(result_pvalues)
 
         # get largest p-value and check if statistically insignificant
         if largest_pvalue <= fSignificance_level:
@@ -168,10 +149,6 @@ def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndepend
         # if not, check index of the largest value
         else:
             index_largest_value = result_pvalues.index(largest_pvalue)
-            print(index_largest_value)
-
-
-            
         
             # flatten the list of lags
             flat_current_lags = list(itertools.chain(*current_lags))
@@ -197,18 +174,19 @@ def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndepend
                 previous_lag = lag
             
             current_lags.append(lags_var)
-            print(current_lags)
-    print("---")
-    print(current_lags)
     return current_result
         
 
 
+result_adl_UNRATE = ADL_General2Specific(df, 4, 0.05, 'UN_RATE', ['UN_RATE', 'GDP_QGR'])
+print("ADL Model: parameters and p-values")
+print(result_adl_UNRATE.params)
+print(result_adl_UNRATE.pvalues)
 
-#UNRATE_ADL = ADL_model(df, 'UN_RATE', ['GDP_QGR', "UN_RATE"], [[1,2,3,4], [1,2,3,4]])
-#UNRATE_ADL_PARAM = UNRATE_ADL.params
-#print('Parameters of the ADL model: \n', UNRATE_ADL_PARAM)
+result_ar_GDP = ADL_General2Specific(df, 4, 0.05, 'GDP_QGR', ['GDP_QGR'])
+print("AR Model: parameters and p-values")
+print(result_ar_GDP.params)
+print(result_ar_GDP.pvalues)
 
 
-UNRATE_ADL_G2S = ADL_General2Specific(df,4, 0.05, 'UN_RATE', ['GDP_QGR', "UN_RATE"])
-print(UNRATE_ADL_G2S.params)
+# Question 2:
