@@ -66,6 +66,16 @@ forecast_table = pd.merge(q4_forecast.predicted_mean, q4_forecast.conf_int(alpha
                           right_index=True, left_index=True)
 print(forecast_table.to_latex())
 
+## Question 6:
+# JB test:
+jb = sm.stats.stattools.jarque_bera(model_q2_resids, axis=0)
+print('The JB test-statistic = ',jb[0],
+      '\nP-value = ', jb[1])
+
+# ARCH-LM test for hetereoskedasticity:
+hetreosk_test = model_q2.test_heteroskedasticity(lags=12)
+print(hetreosk_test.to_latex())
+
 
 ## Question 7:
 # Merge forecast with actual data:
