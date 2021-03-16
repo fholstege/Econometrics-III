@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from statsmodels.tsa.ar_model import AutoReg
 import statsmodels.formula.api as smf
+from statsmodels.tsa.arima_model import ARIMA
+import itertools
 
 # Data
 df = pd.read_csv('data_assign_p2.csv')
@@ -75,24 +77,32 @@ def lag(x, n):
     x[:n] = np.nan
     return x
 
-def ADL_model(df, sDependent, lIndependent, lN_lags):
+def ADL_model(df, sDependent, lIndependent, lLags, exo_adjust = True):
 
-    # save here the exogeneous variables at t
+    # define empty string with exogenous var to be filled if exo_ajdust = True
     ex_var_t = ''
-    exogenous_var = [x for x in lIndependent if x != sDependent]
 
+    if exo_adjust:
+        # save here the exogeneous variables at t
+        exogenous_var = [x for x in lIndependent if x != sDependent]
+
+        # add to formula
+        for ex_var in exogenous_var:
+            ex_var_t = ex_var+' +'
+  
     # save here the lags for all other variables
     independent_form = ''
 
     # index to count
     i = 0
 
-    # these two for loops create a formula for ADL model
-    for ex_var in exogenous_var:
-        ex_var_t = ex_var+' +'
+    # add lags for the independent var
+    for index_var in range(0,len(lIndependent)):
+        lags_var = lLags[index_var]
+        var = lIndependent[index_var]
 
-    for var in lIndependent:
-        for n_lags in range(1, lN_lags[i] + 1):
+
+        for n_lags in lags_var:
             str_independent = 'lag('+var+', '+str(n_lags)+') + '
             independent_form += str_independent
         i += 1
@@ -107,95 +117,98 @@ def ADL_model(df, sDependent, lIndependent, lN_lags):
 
     return(model_fitted)
 
+
 def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndependent):
 
     # get number of variables
     n_vars = len(lIndependent)
 
+    # get which vars are exgogenous
+    exogenous_var = [x for x in lIndependent if x != sDependent]
+    index_exogenous_var = lIndependent.index(exogenous_var[0])
+
     #  boolean: while true, continue to try out lags
     one_var_insignificant = True
     
     # start at both at max lag
-    current_lags = np.array([iMax_lags]*n_vars)
+    lag_structure = list(range(1,iMax_lags+1))
+    current_lags = []
 
-    # create list of indices for p-values to check
-    multiplier_pval = np.array(range(1,len(current_lags)+1))
-    check_pval_indeces = (current_lags * multiplier_pval)-1
+    for j in range(0, n_vars):
+        
+        if j == index_exogenous_var:
+            print("ADDING EXOGENOUS")
+            exo_lags = [0] + lag_structure
+            current_lags.append(exo_lags)
+        else:
+            current_lags.append(lag_structure)
+
+    print(current_lags)
+    print("888")
+
+
 
     # while one insignificant, check models
     while one_var_insignificant:
 
         # run adl model for current iteration
-        current_result = ADL_model(df = df, sDependent = sDependent, lIndependent=lIndependent,lN_lags=current_lags )
+        current_result = ADL_model(df = df, sDependent = sDependent, lIndependent=lIndependent,lLags=current_lags, exo_adjust=False)
 
-        # get p-values for current iteration
-        result_pvalues = np.array(current_result.pvalues[1:])
+        # get the p-values
+        result_pvalues = list(current_result.pvalues[1:])
 
+        # get largest p-value
+        largest_pvalue = max(result_pvalues)
 
-        # get p-values for largest lags (e.g. if largest lag is 4, get 4th lag)
-        pval_to_check = result_pvalues[check_pval_indeces]
+        print(result_pvalues)
 
-        # count how many are not significant
-        n_not_significant = 0
-
-        # count how many var have been removed in process
-        n_removed = 0
-
-        # go through all p-values 
-        for i in range(0,len(pval_to_check)):
-            
-            # current p-value to check
-            pval_var = pval_to_check[i]
-
-            # change indices based on how many already removed
-            check_pval_indeces[i - n_removed] = check_pval_indeces[i - n_removed]- n_not_significant
-
-            # if statistically insignificant...
-            if pval_var > fSignificance_level:
-                
-                # reduce the lag - e.g. if 4th lag statistically insignificant, remove that one
-                current_lags[i] = current_lags[i]-1
-
-                # change indices of p-values to check
-                check_pval_indeces[i] = check_pval_indeces[i]-1 
-
-                # continue counting how many significant for while loop
-                n_not_significant += 1
-            
-            # if one of the variables removed (because all statistically insignificant)
-            if current_lags[i-n_removed] <=0:
-                current_lags = np.delete(current_lags, [i])
-                check_pval_indeces = np.delete(check_pval_indeces, [i])
-                del lIndependent[i]
-                n_removed =+ 1
-                
-            
-        # if none statistically insignificant, then stop while        
-        if n_not_significant == 0:
+        # get largest p-value and check if statistically insignificant
+        if largest_pvalue <= fSignificance_level:
             one_var_insignificant = False
-    # return latest model
-    return(current_result)    
+        # if not, check index of the largest value
+        else:
+            index_largest_value = result_pvalues.index(largest_pvalue)
+            print(index_largest_value)
+
+
+            
+        
+            # flatten the list of lags
+            flat_current_lags = list(itertools.chain(*current_lags))
+
+            # remove insignificant var
+            del flat_current_lags[index_largest_value]
+
+
+            # turn the list back to one that can be used in adl_model
+            previous_lag = flat_current_lags[0]
+            lags_var = [previous_lag]
+            current_lags = []
+
+            for lag in flat_current_lags[1:]:
+ 
+                if lag > previous_lag:
+                    lags_var.append(lag)
+                else:
+                    current_lags.append(lags_var)
+                    lags_var = []
+                    lags_var.append(lag)
+
+                previous_lag = lag
+            
+            current_lags.append(lags_var)
+            print(current_lags)
+    print("---")
+    print(current_lags)
+    return current_result
+        
 
 
 
-UNRATE_ADL = ADL_General2Specific(df,4 ,0.1,'UN_RATE', ['GDP_QGR', "UN_RATE"])
-UNRATE_ADL_params = UNRATE_ADL.params
-print('Parameters of the ADL model: \n', UNRATE_ADL_params)
-
-# question 2
-ADL_UNRATE_G2S = ADL_model(df, 'UN_RATE', ['UN_RATE'], [3])
-
-# short run
-print(ADL_UNRATE_G2S.params)
-
-# long run
-mean_lag1_unrate = np.mean(lag(df['UN_RATE'],1))
-mean_lag2_unrate = np.mean(lag(df['UN_RATE'],2))
-mean_lag3_unrate = np.mean(lag(df['UN_RATE'],3))
-
-df_LR = pd.DataFrame()
-df_LR['mean_lag1_UN_RATE'] = mean_lag1_unrate
-df_LR['mean_lag2_UN_RATE'] = mean_lag2_unrate
-df_LR['mean_lag3_UN_RATE'] = mean_lag3_unrate
+#UNRATE_ADL = ADL_model(df, 'UN_RATE', ['GDP_QGR', "UN_RATE"], [[1,2,3,4], [1,2,3,4]])
+#UNRATE_ADL_PARAM = UNRATE_ADL.params
+#print('Parameters of the ADL model: \n', UNRATE_ADL_PARAM)
 
 
+UNRATE_ADL_G2S = ADL_General2Specific(df,4, 0.05, 'UN_RATE', ['GDP_QGR', "UN_RATE"])
+print(UNRATE_ADL_G2S.params)
