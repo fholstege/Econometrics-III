@@ -8,6 +8,8 @@ import statsmodels.formula.api as smf
 from statsmodels.tsa.stattools import acf
 import itertools
 from operator import itemgetter 
+from scipy.stats import norm
+
 
 # get rid of scientific notation
 pd.options.display.float_format = '{:.2f}'.format
@@ -179,14 +181,69 @@ def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndepend
 
 
 result_adl_UNRATE = ADL_General2Specific(df, 4, 0.05, 'UN_RATE', ['UN_RATE', 'GDP_QGR'])
-print("ADL Model: parameters and p-values")
+print("ADL Unemployment Model: parameters and p-values")
 print(result_adl_UNRATE.params)
 print(result_adl_UNRATE.pvalues)
 
 result_ar_GDP = ADL_General2Specific(df, 4, 0.05, 'GDP_QGR', ['GDP_QGR'])
-print("AR Model: parameters and p-values")
+print("AR GDP Model: parameters and p-values")
 print(result_ar_GDP.params)
 print(result_ar_GDP.pvalues)
 
 
 # Question 2:
+## short-run: there is none, = 0
+## long-run: use derivation from lecture slides, sum the coefficients
+## two-step: use derivation from lecture slides, estimate y_t and x_t 
+
+X_hat = np.mean(df['GDP_QGR'])
+b_0 = result_adl_UNRATE.params[1]
+b_1 = result_adl_UNRATE.params[2]
+b_2 = result_adl_UNRATE.params[3]
+sum_b0_b1= np.sum(b_0,b_1)
+alpha = result_adl_UNRATE.params[0]
+
+long_term_UN_RATE = ((X_hat * b_2) + alpha)/(1-sum_phi1_phi3)
+print("Long-term UN Rate est.")
+print(long_term_UN_RATE)
+
+
+two_step_multiplier = b_0 * b_2 + b_2 * result_ar_GDP.params[1]
+print("two-step multiplier:")
+print(two_step_multiplier)
+
+# Question 3:
+## Suppose that the innovations are iid Gaussian. What is the probability of the unemployment rate rising above 7.8% in the second quarter of 2014? What is the probability that
+## it drops below 7.8%? Do you trust the iid Gaussian assumption?
+
+# prediction for quarter 2 of 2014
+
+df_prediction_forQ22014= df.tail(4)
+print(df_prediction_forQ22014)
+
+prediction_Q22014  = result_adl_UNRATE.predict(df_prediction_forQ22014).iloc[-1]
+print("Prediction for Q2 of 2014")
+print(prediction_Q22014)
+print(type(prediction_Q22014))
+
+residuals_ADL = result_adl_UNRATE.resid
+plt.hist(residuals_ADL)
+plt.show()
+
+mean_residuals = np.mean(residuals_ADL)
+var_residuals = np.var(residuals_ADL)
+
+print("Mean residuals of ADL: ",mean_residuals )
+print("Variance residuals of ADL: ",var_residuals )
+
+benchmark = 7.8
+diff_prediction_benchmark = benchmark - prediction_Q22014
+print(benchmark)
+print(prediction_Q22014)
+chance_observing_higher = norm.cdf(diff_prediction_benchmark, loc = 0, scale =np.sqrt(var_residuals ))
+print("Chance of observing difference of ", diff_prediction_benchmark)
+print(chance_observing_higher)
+
+
+
+
