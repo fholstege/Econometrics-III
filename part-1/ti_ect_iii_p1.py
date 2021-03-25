@@ -40,11 +40,11 @@ def ar_g2s(maxlags, alpha):
         model = AutoReg(df['GDP_QGR'], lags=i, trend='c', old_names=False)
         model_fitted = model.fit(use_t=True)
         
-        if model_fitted.pvalues[-1]<=0.05:
+        if model_fitted.pvalues[-1]<=alpha:
             result = model_fitted
             break
         else:
-            print('Last coefficient is not significant at 95% level...')
+            print('Last coefficient is not significant at',1-alpha, '% level...')
 
     return result
 
