@@ -287,6 +287,15 @@ def combine_ADL_AR_prediction(n_periods_needed, n_forward_predictions, ADL_model
     return df_predictions
 
 
-
 combine_ADL_AR_prediction(3, 9, result_adl_UNRATE, result_ar_GDP,df)
-s
+
+
+## Question 6: IRF
+# Start with the AR(...):
+
+
+
+
+
+
+
