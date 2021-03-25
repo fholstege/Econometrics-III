@@ -261,7 +261,7 @@ def combine_ADL_AR_prediction(n_periods_needed, n_forward_predictions, ADL_model
 
     # df for AR model
     df_GDPQR = df['GDP_QGR']
-    start_append_df = len(df_GDPQR.index)
+    start_append_df = len(df_predictions.index)
     
     # add time to each
     three_mon_rel = relativedelta(months=3)
