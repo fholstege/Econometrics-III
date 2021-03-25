@@ -205,12 +205,10 @@ beta_1 = result_adl_UNRATE.params[3]
 sum_phi_1_phi_3 = phi_1 + phi_3
 alpha = result_adl_UNRATE.params[0]
 
-
 long_term_multiplier = beta_1 / (1- sum_phi_1_phi_3)
 long_term_UN_RATE = ((X_hat * beta_1)  + alpha)/(1-sum_phi_1_phi_3)
 print("Long-term UN Rate est.")
 print(long_term_UN_RATE)
-
 
 two_step_multiplier = phi_1 * beta_1 + beta_1 * result_ar_GDP.params[1]
 print("two-step multiplier:")
@@ -257,41 +255,26 @@ def combine_ADL_AR_prediction(n_periods_needed, n_forward_predictions, ADL_model
     df_predictions  = df.copy(deep=True)
     df_predictions= df.tail(n_periods_needed)
     df_predictions.loc[n_periods_needed + 1] = [np.nan,np.nan,np.nan]
-    df_predictions = df_predictions.reset_index()
-    df_predictions = df_predictions.drop('index', axis = 1)
+
+    print(df_predictions)
 
     # df for AR model
-    df_GDPQR = df_predictions['GDP_QGR']
-    df_GDPQR = df_GDPQR.reset_index()
-    df_GDPQR = df_GDPQR.drop('index', axis = 1)
-    
-    # df for predictions
-    start_append = len(df_GDPQR.index)
+    df_GDPQR = df['GDP_QGR']
+    start_append_df = len(df_predictions.index)
 
     # add time to each
     three_mon_rel = relativedelta(months=3)
     prev_date = df_predictions['obs'].iloc[-2]
 
-    
-    print("Df gdpqr at start")
-    print(df_GDPQR)
-    
+
     # check how many predictions
     for i in range(0,n_forward_predictions):
 
         # get X_t from AR
         X_t_fromAR = AR_model.predict(df_GDPQR).iloc[-1]
-        
-        print("Get current prediction")
-        print(AR_model.predict(df_GDPQR))
 
         # update for AR prediction
-        df_GDPQR.loc[start_append + i-1] = X_t_fromAR
-        df_GDPQR.loc[start_append + i] = [np.nan]
-
-        
-        print("insert at: ", start_append + i - 1)
-        print(df_GDPQR)
+        df_GDPQR.loc[start_append_df + i] = X_t_fromAR
 
         # get Y_t
         y_t_fromADL = ADL_model.predict(df_predictions).iloc[-1]
@@ -299,15 +282,18 @@ def combine_ADL_AR_prediction(n_periods_needed, n_forward_predictions, ADL_model
         # update for next one
         prev_date = prev_date + three_mon_rel
         row_to_add = [prev_date, X_t_fromAR, y_t_fromADL]
-        df_predictions.loc[start_append + i-1] = row_to_add
-    
-    
-    df_predictions = df_predictions[:-1]
-  
+        print(start_append_df + i-1)
+        df_predictions.loc[start_append_df + i-1] = row_to_add
+
+        print("---")
+        print(df_predictions)
 
     return df_predictions
 
 
+combine_ADL_AR_prediction(3, 9, result_adl_UNRATE, result_ar_GDP,df)
+
+>>>>>>> walter
 ## Question 6: IRF
 # Start with the AR(...):
 
