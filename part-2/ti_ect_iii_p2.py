@@ -11,6 +11,8 @@ from operator import itemgetter
 from scipy.stats import norm
 from dateutil.relativedelta import relativedelta
 
+
+
 # get rid of scientific notation
 pd.options.display.float_format = '{:.2f}'.format
 
@@ -133,7 +135,7 @@ def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndepend
 
         # get the residuals and acf
         current_result_residuals =  current_result.resid
-        acf_result = acf(current_result_residuals, adjusted = True, nlags = nlags_acf, qstat = True, fft = False)
+        acf_result = acf(current_result_residuals, nlags = nlags_acf, qstat = True, fft = False)
         qstat_pval = acf_result[2]
 
         if min(qstat_pval) <= fSignificance_level:
@@ -197,13 +199,13 @@ print(result_ar_GDP.pvalues)
 ## two-step: use derivation from lecture slides, estimate y_t and x_t 
 
 X_hat = np.mean(df['GDP_QGR'])
-b_0 = result_adl_UNRATE.params[1]
-b_1 = result_adl_UNRATE.params[2]
-b_2 = result_adl_UNRATE.params[3]
-sum_b0_b1= b_0 + b_1
+phi_1 = result_adl_UNRATE.params[1]
+phi_3 = result_adl_UNRATE.params[2]
+beta_1 = result_adl_UNRATE.params[3]
+sum_phi_1_phi_3 = phi_1 + phi_3
 alpha = result_adl_UNRATE.params[0]
 
-long_term_UN_RATE = ((X_hat * b_2) + alpha)/(1-sum_b0_b1)
+long_term_UN_RATE = ((X_hat  + alpha)/(1-sum_b0_b1)
 print("Long-term UN Rate est.")
 print(long_term_UN_RATE)
 
