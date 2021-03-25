@@ -205,16 +205,8 @@ beta_1 = result_adl_UNRATE.params[3]
 sum_phi_1_phi_3 = phi_1 + phi_3
 alpha = result_adl_UNRATE.params[0]
 
-<<<<<<< HEAD
-# long_term_UN_RATE = ((X_hat  + alpha)/(1-sum_b0_b1)
-# print("Long-term UN Rate est.")
-# print(long_term_UN_RATE)
 
 
-# two_step_multiplier = b_0 * b_2 + b_2 * result_ar_GDP.params[1]
-# print("two-step multiplier:")
-# print(two_step_multiplier)
-=======
 long_term_multiplier = beta_1 / (1- sum_phi_1_phi_3)
 long_term_UN_RATE = ((X_hat * beta_1)  + alpha)/(1-sum_phi_1_phi_3)
 print("Long-term UN Rate est.")
@@ -224,7 +216,7 @@ print(long_term_UN_RATE)
 two_step_multiplier = phi_1 * beta_1 + beta_1 * result_ar_GDP.params[1]
 print("two-step multiplier:")
 print(two_step_multiplier)
->>>>>>> e2ac10923238c82c85160279247dccc0b11a3fdf
+
 
 # Question 4:
 ## Suppose that the innovations are iid Gaussian. What is the probability of the unemployment rate rising above 7.8% in the second quarter of 2014? What is the probability that
@@ -305,8 +297,6 @@ def combine_ADL_AR_prediction(n_periods_needed, n_forward_predictions, ADL_model
 
 
 combine_ADL_AR_prediction(3, 9, result_adl_UNRATE, result_ar_GDP,df)
-<<<<<<< HEAD
-
 
 ## Question 6: IRF
 # Start with the AR(...):
@@ -349,5 +339,4 @@ def irf_y(length, origin_y, shock_y):
     
     return dys
 
-=======
->>>>>>> e2ac10923238c82c85160279247dccc0b11a3fdf
+
