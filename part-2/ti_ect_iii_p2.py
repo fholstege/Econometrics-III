@@ -5,16 +5,8 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from statsmodels.tsa.ar_model import AutoReg
 import statsmodels.formula.api as smf
-from statsmodels.tsa.stattools import acf
+from statsmodels.tsa.arima_model import ARIMA
 import itertools
-from operator import itemgetter 
-from scipy.stats import norm
-from dateutil.relativedelta import relativedelta
-
-
-
-# get rid of scientific notation
-pd.options.display.float_format = '{:.2f}'.format
 
 # Data
 df = pd.read_csv('data_assign_p2.csv')
@@ -45,6 +37,31 @@ axis2.tick_params(axis='y', labelcolor=color2)
 # show together in the same plot
 figure.tight_layout()  
 plt.show()
+
+
+def AR_General2Specific(iMax_lags, fSignificance_level, df, lVariables):
+    '''
+    AR_General2Specific: applies the general to specific approach for finding the appropriate number of lags 
+    '''
+
+    # go through total lags to check
+    for number_lags in range(iMax_lags, 0, -1):
+        AR_Model = AutoReg(df[lVariables], lags=number_lags, trend='c', old_names=False)
+        AR_Model_fitted = AR_Model.fit(use_t=True)
+                
+        # check if significance level is matched by last lag
+        if AR_Model_fitted.pvalues[-1]<=fSignificance_level:
+            result = AR_Model_fitted
+            break
+        else:
+            print('At ' + str(number_lags) +' lags, the last coefficient is not significant at the ' + str(1-fSignificance_level) + ' level')
+
+    return result
+
+
+GDP_AR = AR_General2Specific(4, 0.05, df, ['GDP_QGR'])
+GDP_AR_PARAM = GDP_AR.params
+print('Parameters of the AR model: \n', GDP_AR_PARAM)
 
 
 def lag(x, n):
@@ -101,14 +118,14 @@ def ADL_model(df, sDependent, lIndependent, lLags, exo_adjust = True):
     return(model_fitted)
 
 
-def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndependent, nlags_acf = 12):
+def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndependent):
 
     # get number of variables
     n_vars = len(lIndependent)
 
     # get which vars are exgogenous
     exogenous_var = [x for x in lIndependent if x != sDependent]
-    index_exogenous_var = np.where(np.isin(exogenous_var,lIndependent))
+    index_exogenous_var = lIndependent.index(exogenous_var[0])
 
     #  boolean: while true, continue to try out lags
     one_var_insignificant = True
@@ -119,11 +136,15 @@ def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndepend
 
     for j in range(0, n_vars):
         
-        if j in [index_exogenous_var]:
+        if j == index_exogenous_var:
+            print("ADDING EXOGENOUS")
             exo_lags = [0] + lag_structure
             current_lags.append(exo_lags)
         else:
             current_lags.append(lag_structure)
+
+    print(current_lags)
+    print("888")
 
 
 
@@ -133,19 +154,13 @@ def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndepend
         # run adl model for current iteration
         current_result = ADL_model(df = df, sDependent = sDependent, lIndependent=lIndependent,lLags=current_lags, exo_adjust=False)
 
-        # get the residuals and acf
-        current_result_residuals =  current_result.resid
-        acf_result = acf(current_result_residuals, nlags = nlags_acf, qstat = True, fft = False)
-        qstat_pval = acf_result[2]
-
-        if min(qstat_pval) <= fSignificance_level:
-            one_var_insignificant = False
-     
         # get the p-values
         result_pvalues = list(current_result.pvalues[1:])
 
         # get largest p-value
         largest_pvalue = max(result_pvalues)
+
+        print(result_pvalues)
 
         # get largest p-value and check if statistically insignificant
         if largest_pvalue <= fSignificance_level:
@@ -153,6 +168,10 @@ def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndepend
         # if not, check index of the largest value
         else:
             index_largest_value = result_pvalues.index(largest_pvalue)
+            print(index_largest_value)
+
+
+            
         
             # flatten the list of lags
             flat_current_lags = list(itertools.chain(*current_lags))
@@ -178,126 +197,18 @@ def ADL_General2Specific(df,iMax_lags, fSignificance_level, sDependent,lIndepend
                 previous_lag = lag
             
             current_lags.append(lags_var)
+            print(current_lags)
+    print("---")
+    print(current_lags)
     return current_result
         
 
 
-result_adl_UNRATE = ADL_General2Specific(df, 4, 0.05, 'UN_RATE', ['UN_RATE', 'GDP_QGR'])
-print("ADL Unemployment Model: parameters and p-values")
-print(result_adl_UNRATE.params)
-print(result_adl_UNRATE.pvalues)
 
-result_ar_GDP = ADL_General2Specific(df, 4, 0.05, 'GDP_QGR', ['GDP_QGR'])
-print("AR GDP Model: parameters and p-values")
-print(result_ar_GDP.params)
-print(result_ar_GDP.pvalues)
+#UNRATE_ADL = ADL_model(df, 'UN_RATE', ['GDP_QGR', "UN_RATE"], [[1,2,3,4], [1,2,3,4]])
+#UNRATE_ADL_PARAM = UNRATE_ADL.params
+#print('Parameters of the ADL model: \n', UNRATE_ADL_PARAM)
 
 
-# Question 2:
-## short-run: there is none, = 0
-## long-run: use derivation from lecture slides, sum the coefficients
-## two-step: use derivation from lecture slides, estimate y_t and x_t 
-
-X_hat = np.mean(df['GDP_QGR'])
-phi_1 = result_adl_UNRATE.params[1]
-phi_3 = result_adl_UNRATE.params[2]
-beta_1 = result_adl_UNRATE.params[3]
-sum_phi_1_phi_3 = phi_1 + phi_3
-alpha = result_adl_UNRATE.params[0]
-
-long_term_UN_RATE = ((X_hat  + alpha)/(1-sum_b0_b1)
-print("Long-term UN Rate est.")
-print(long_term_UN_RATE)
-
-
-two_step_multiplier = b_0 * b_2 + b_2 * result_ar_GDP.params[1]
-print("two-step multiplier:")
-print(two_step_multiplier)
-
-# Question 4:
-## Suppose that the innovations are iid Gaussian. What is the probability of the unemployment rate rising above 7.8% in the second quarter of 2014? What is the probability that
-## it drops below 7.8%? Do you trust the iid Gaussian assumption?
-
-# prediction for quarter 2 of 2014
-df_prediction_forQ22014= df.tail(3)
-df_prediction_forQ22014.loc[4] = [np.nan,np.nan,np.nan]
-
-
-prediction_Q22014  = result_adl_UNRATE.predict(df_prediction_forQ22014).iloc[-1]
-print("Prediction for Q2 of 2014")
-print(prediction_Q22014)
-
-residuals_ADL = result_adl_UNRATE.resid
-plt.hist(residuals_ADL)
-plt.show()
-
-mean_residuals = np.mean(residuals_ADL)
-var_residuals = np.var(residuals_ADL)
-
-print("Mean residuals of ADL: ",mean_residuals )
-print("Variance residuals of ADL: ",var_residuals )
-
-benchmark = 7.8
-diff_prediction_benchmark = benchmark - prediction_Q22014
-print(benchmark)
-print(prediction_Q22014)
-chance_observing_higher = norm.cdf(diff_prediction_benchmark, loc = 0, scale =np.sqrt(var_residuals ))
-print("Chance of observing difference of ", diff_prediction_benchmark)
-print(chance_observing_higher)
-
-
-# Question 5:
-#Make use of your estimated AR and ADL models to produce a 2-year (8 quarter) forecast
-#for the Unemployment rate that spans until the first quarter of 2016. Report the obtained
-#values
-
-
-def combine_ADL_AR_prediction(n_periods_needed, n_forward_predictions, ADL_model, AR_model, df):
-
-     # save predictions here
-    df_predictions  = df.copy(deep=True)
-    df_predictions= df.tail(n_periods_needed)
-    df_predictions.loc[n_periods_needed + 1] = [np.nan,np.nan,np.nan]
-
-    # df for AR model
-    df_GDPQR = df['GDP_QGR']
-    start_append_df = len(df_GDPQR.index)
-    
-    # add time to each
-    three_mon_rel = relativedelta(months=3)
-    prev_date = df_predictions['obs'].iloc[-2]
-        
-   
-    # check how many predictions
-    for i in range(0,n_forward_predictions):
-
-        # get X_t from AR
-        X_t_fromAR = AR_model.predict(df_GDPQR).iloc[-1]
-        
-        # update for AR prediction
-        df_GDPQR.loc[start_append_df + i] = X_t_fromAR
-        
-        # get Y_t 
-        y_t_fromADL = ADL_model.predict(df_predictions).iloc[-1]
-        
-        # update for next one
-        prev_date = prev_date + three_mon_rel
-        row_to_add = [prev_date, X_t_fromAR, y_t_fromADL]
-        df_predictions.loc[start_append_df + i] = row_to_add
-        
-
-    return df_predictions
-
-
-combine_ADL_AR_prediction(3, 9, result_adl_UNRATE, result_ar_GDP,df)
-
-
-## Question 6: IRF
-# Start with the AR(...):
-
-
-
-
-
-
-
+UNRATE_ADL_G2S = ADL_General2Specific(df,4, 0.05, 'UN_RATE', ['GDP_QGR', "UN_RATE"])
+print(UNRATE_ADL_G2S.params)
