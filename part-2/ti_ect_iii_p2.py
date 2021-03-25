@@ -217,13 +217,13 @@ print(two_step_multiplier)
 ## it drops below 7.8%? Do you trust the iid Gaussian assumption?
 
 # prediction for quarter 2 of 2014
-df_prediction_forQ22014= df.tail(4)
-print(df_prediction_forQ22014)
+df_prediction_forQ22014= df.tail(3)
+df_prediction_forQ22014.loc[4] = [np.nan,np.nan,np.nan]
+
 
 prediction_Q22014  = result_adl_UNRATE.predict(df_prediction_forQ22014).iloc[-1]
 print("Prediction for Q2 of 2014")
 print(prediction_Q22014)
-print(type(prediction_Q22014))
 
 residuals_ADL = result_adl_UNRATE.resid
 plt.hist(residuals_ADL)
@@ -250,44 +250,43 @@ print(chance_observing_higher)
 #values
 
 
-def combine_ADL_AR_prediction(start, n_predictions, ADL_model, AR_model, df):
+def combine_ADL_AR_prediction(n_periods_needed, n_forward_predictions, ADL_model, AR_model, df):
 
-    
+     # save predictions here
+    df_predictions  = df.copy(deep=True)
+    df_predictions= df.tail(n_periods_needed)
+    df_predictions.loc[n_periods_needed + 1] = [np.nan,np.nan,np.nan]
+
     # df for AR model
     df_GDPQR = df['GDP_QGR']
     start_append_df = len(df_GDPQR.index)
     
-    # save predictions here
-    df_predictions  = df.copy(deep=True)
-    
     # add time to each
     three_mon_rel = relativedelta(months=3)
-    prev_date = df_predictions['obs'].iloc[-1]
-    
-    # check how many predictions
-    for i in range(1,n_predictions):
+    prev_date = df_predictions['obs'].iloc[-2]
         
+   
+    # check how many predictions
+    for i in range(0,n_forward_predictions):
+
         # get X_t from AR
         X_t_fromAR = AR_model.predict(df_GDPQR).iloc[-1]
         
         # update for AR prediction
-        df_GDPQR.loc[start_append_df - 1 + i] = X_t_fromAR
-    
+        df_GDPQR.loc[start_append_df + i] = X_t_fromAR
+        
         # get Y_t 
         y_t_fromADL = ADL_model.predict(df_predictions).iloc[-1]
         
         # update for next one
         prev_date = prev_date + three_mon_rel
         row_to_add = [prev_date, X_t_fromAR, y_t_fromADL]
-        df_predictions.loc[start_append_df - 1 + i] = row_to_add
-       
-        
+        df_predictions.loc[start_append_df + i] = row_to_add
         
 
     return df_predictions
 
 
 
-
-combine_ADL_AR_prediction("2014-04-01", 10, result_adl_UNRATE, result_ar_GDP,df_prediction_forQ22014)
-
+combine_ADL_AR_prediction(3, 9, result_adl_UNRATE, result_ar_GDP,df)
+s
