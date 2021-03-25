@@ -40,11 +40,11 @@ def ar_g2s(maxlags, alpha):
         model = AutoReg(df['GDP_QGR'], lags=i, trend='c', old_names=False)
         model_fitted = model.fit(use_t=True)
         
-        if model_fitted.pvalues[-1]<=0.05:
+        if model_fitted.pvalues[-1]<=alpha:
             result = model_fitted
             break
         else:
-            print('Last coefficient is not significant at 95% level...')
+            print('Last coefficient is not significant at',1-alpha, '% level...')
 
     return result
 
@@ -65,6 +65,16 @@ q4_forecast = model_q2.get_prediction(start='2009-04-01', end='2011-01-01')
 forecast_table = pd.merge(q4_forecast.predicted_mean, q4_forecast.conf_int(alpha=0.05),
                           right_index=True, left_index=True)
 print(forecast_table.to_latex())
+
+## Question 6:
+# JB test:
+jb = sm.stats.stattools.jarque_bera(model_q2_resids, axis=0)
+print('The JB test-statistic = ',jb[0],
+      '\nP-value = ', jb[1])
+
+# ARCH-LM test for hetereoskedasticity:
+hetreosk_test = model_q2.test_heteroskedasticity(lags=12)
+print(hetreosk_test.to_latex())
 
 
 ## Question 7:
