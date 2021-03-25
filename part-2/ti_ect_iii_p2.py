@@ -10,7 +10,7 @@ import itertools
 from operator import itemgetter
 from scipy.stats import norm
 from dateutil.relativedelta import relativedelta
-
+import scipy.stats as st
 
 
 # get rid of scientific notation
@@ -210,7 +210,9 @@ long_term_UN_RATE = ((X_hat * beta_1)  + alpha)/(1-sum_phi_1_phi_3)
 print("Long-term UN Rate est.")
 print(long_term_UN_RATE)
 
-two_step_multiplier = phi_1 * beta_1 + beta_1 * result_ar_GDP.params[1]
+
+
+two_step_multiplier = phi_1 * beta_1 
 print("two-step multiplier:")
 print(two_step_multiplier)
 
@@ -233,14 +235,22 @@ plt.show()
 
 mean_residuals = np.mean(residuals_ADL)
 var_residuals = np.var(residuals_ADL)
+stdev_residuals = np.std(residuals_ADL)
+
+var_residuals
 
 print("Mean residuals of ADL: ",mean_residuals )
-print("Variance residuals of ADL: ",var_residuals )
+print("Stdev residuals of ADL: ",stdev_residuals )
+
+KS_stat, p = st.kstest(residuals_ADL, 'norm', args=(0, stdev_residuals), N=1000)
+print("Result of KS test: ", KS_stat)
 
 benchmark = 7.8
-diff_prediction_benchmark = benchmark - prediction_Q22014
-chance_observing_higher = norm.cdf(diff_prediction_benchmark, loc = 0, scale =np.sqrt(var_residuals ))
-print("Chance of observing difference of ", diff_prediction_benchmark)
+diff_prediction_benchmark = np.round(benchmark - prediction_Q22014,1)
+
+diff_prediction_benchmark = np.round(benchmark - prediction_Q22014,1)
+chance_observing_higher = norm.cdf(diff_prediction_benchmark, loc = 0, scale =stdev_residuals)
+print("Chance of observing value below ", diff_prediction_benchmark)
 print(chance_observing_higher)
 
 
@@ -255,12 +265,14 @@ def combine_ADL_AR_prediction(n_periods_needed, n_forward_predictions, ADL_model
     df_predictions  = df.copy(deep=True)
     df_predictions= df.tail(n_periods_needed)
     df_predictions.loc[n_periods_needed + 1] = [np.nan,np.nan,np.nan]
+    df_predictions = df_predictions.reset_index()
+    df_predictions = df_predictions.drop("index", axis = 1)
 
-    print(df_predictions)
 
     # df for AR model
-    df_GDPQR = df['GDP_QGR']
+    df_GDPQR = df_predictions['GDP_QGR'].copy(deep = True)
     start_append_df = len(df_predictions.index)
+
 
     # add time to each
     three_mon_rel = relativedelta(months=3)
@@ -268,30 +280,42 @@ def combine_ADL_AR_prediction(n_periods_needed, n_forward_predictions, ADL_model
 
 
     # check how many predictions
-    for i in range(0,n_forward_predictions):
+    for i in range(0,n_forward_predictions+1):
 
         # get X_t from AR
         X_t_fromAR = AR_model.predict(df_GDPQR).iloc[-1]
 
         # update for AR prediction
-        df_GDPQR.loc[start_append_df + i] = X_t_fromAR
+        df_GDPQR.loc[start_append_df + i - 1] = X_t_fromAR
+        df_GDPQR.loc[start_append_df + i] = np.nan
+        
 
         # get Y_t
         y_t_fromADL = ADL_model.predict(df_predictions).iloc[-1]
+        
 
         # update for next one
         prev_date = prev_date + three_mon_rel
         row_to_add = [prev_date, X_t_fromAR, y_t_fromADL]
-        print(start_append_df + i-1)
         df_predictions.loc[start_append_df + i-1] = row_to_add
-
-        print("---")
-        print(df_predictions)
-
-    return df_predictions
+        df_predictions.loc[start_append_df + i] = [np.nan, np.nan, np.nan]
 
 
-combine_ADL_AR_prediction(3, 9, result_adl_UNRATE, result_ar_GDP,df)
+
+ 
+
+    return df_predictions.dropna()
+
+
+df_predictions = combine_ADL_AR_prediction(3, 8, result_adl_UNRATE, result_ar_GDP,df)
+
+df_predictions_preQ22014 =  df_predictions[df_predictions['obs'] < '2014-04-01']
+df_predictions_postQ22014 =  df_predictions[df_predictions['obs'] >= '2014-01-01']
+
+plt.plot(df_predictions['obs'], df_predictions_preQ22014['UN_RATE'], 'b')
+plt.plot(df_predictions['obs'],df_predictions_postQ22014['UN_RATE'], 'r--')
+plt.show()
+
 
 ## Question 6: IRF
 # Start with the AR(...):
