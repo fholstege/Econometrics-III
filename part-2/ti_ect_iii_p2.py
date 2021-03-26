@@ -305,8 +305,9 @@ alpha = result_adl_UNRATE.params[0]
 gamma_1 = result_ar_GDP.params[1]
 gamma_3 = result_ar_GDP.params[2]
 
-# start with x:
-def irf_x(length, origin_x, shock_x):
+
+def irf_x(length, origin_x, shock_x, new_index):
+    # derivatives
     dxs = np.empty(length)
     dxs[0] = 1
     dxs[1] = gamma_1*dxs[0]
@@ -316,21 +317,76 @@ def irf_x(length, origin_x, shock_x):
     for i in range(4,length):
         dxs[i] = gamma_1*dxs[i-1] + gamma_3*dxs[i-3]
         
-        return dxs
+    # construct irf
+    irf = np.empty(length)
+    for i in range(0,length):
+        irf[i] = dxs[i]*shock_x + origin_x
+    
+    irf = pd.Series(irf)
+    irf = irf.reindex(new_index)
+    irf[-1] = origin_x
+    return dxs, irf
 
-dxs = irf_x(8, -0.37, 2)
-plt.plot(dxs)
 
-# start with y:
-def irf_y(length, origin_y, shock_y):
-    dys = np.empty(8)
+def irf_y(length, origin_y, shock_y, dxs, new_index):
+    # derivatives
+    dys = np.empty(length)
     dys[0] = 0
     dys[1] = beta_1
     dys[2] = phi_1*dys[1] + beta_1 * dxs[1]
     dys[3] = phi_1*dys[2] + phi_3*dys[0] + beta_1*dxs[2]
     
-    for i in range(4,8):
+    for i in range(4,length):
         dys[i] = phi_1*dys[i-1] + phi_3*dys[i-3] + beta_1*dxs[i]
     
-    return dys
+    # construct irf
+    irf = np.empty(length)
+    for i in range(0,length):
+        irf[i] = dys[i]*shock_y + origin_y
+    
+    irf = pd.Series(irf)
+    irf = irf.reindex(new_index)
+    irf[-1] = origin_y
+    return dys, irf
+
+
+# constants:
+irf_length = 50
+origin_x = -0.37
+shock_x_good = 2.0
+shock_x_bad = -2.0
+shock_y = 1.0
+origin_y = 7.8
+new_index = [*range(-1,irf_length)]
+
+dxs_good, irf_x_good = irf_x(irf_length, origin_x, shock_x_good, new_index)
+dys_good, irf_y_good = irf_y(irf_length, origin_y, shock_x_good, dxs_good, new_index)
+
+# plot good shock:
+fig, axs = plt.subplots(2, sharex=True)
+axs[0].plot(irf_x_good)
+axs[0].set_title('GDP QGR IRF for positive shock in GDP QGR')
+axs[1].plot(irf_y_good)
+axs[1].set_title('Unemployment IRF for positive shock in GDP QGR')
+plt.xlabel('Periods after shock')
+plt.show()
+
+dxs_bad, irf_x_bad = irf_x(irf_length, origin_x, shock_x_bad, new_index)
+dys_bad, irf_y_bad= irf_y(irf_length, origin_y, shock_x_bad, dxs_bad, new_index)
+
+# plot bad shock:
+fig, axs = plt.subplots(2)
+axs[0].plot(irf_x_bad)
+axs[0].set_title('GDP QGR IRF for negative shock in GDP QGR')
+axs[1].plot(irf_y_bad)
+axs[1].set_title('Unemployment IRF for negative shock in GDP QGR')
+plt.xlabel('Periods after shock')
+plt.show()
+
+
+
+
+
+
+
 
