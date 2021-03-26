@@ -10,7 +10,7 @@ import itertools
 from operator import itemgetter
 from scipy.stats import norm
 from dateutil.relativedelta import relativedelta
-
+import scipy.stats as st
 
 
 # get rid of scientific notation
@@ -199,11 +199,23 @@ print(result_ar_GDP.pvalues)
 ## two-step: use derivation from lecture slides, estimate y_t and x_t
 
 X_hat = np.mean(df['GDP_QGR'])
+
+
 phi_1 = result_adl_UNRATE.params[1]
 phi_3 = result_adl_UNRATE.params[2]
 beta_1 = result_adl_UNRATE.params[3]
+gamma_1 = result_ar_GDP.params[1]
+gamma_3 = result_ar_GDP.params[2]
+
+
 sum_phi_1_phi_3 = phi_1 + phi_3
 alpha = result_adl_UNRATE.params[0]
+
+
+X_hat = result_ar_GDP.params[0]/(1-gamma_1-gamma_3)
+
+
+
 
 long_term_multiplier = beta_1 / (1- sum_phi_1_phi_3)
 long_term_UN_RATE = ((X_hat * beta_1)  + alpha)/(1-sum_phi_1_phi_3)
@@ -211,7 +223,8 @@ print("Long-term UN Rate est.")
 print(long_term_UN_RATE)
 
 
-two_step_multiplier = phi_1 * beta_1 + beta_1 * result_ar_GDP.params[1]
+
+two_step_multiplier = phi_1 * beta_1 
 print("two-step multiplier:")
 print(two_step_multiplier)
 
@@ -234,14 +247,22 @@ plt.show()
 
 mean_residuals = np.mean(residuals_ADL)
 var_residuals = np.var(residuals_ADL)
+stdev_residuals = np.std(residuals_ADL)
+
+
 
 print("Mean residuals of ADL: ",mean_residuals )
-print("Variance residuals of ADL: ",var_residuals )
+print("Stdev residuals of ADL: ",stdev_residuals )
+
+KS_stat, p = st.kstest(residuals_ADL, 'norm', args=(0, stdev_residuals), N=1000)
+print("Result of KS test: ", KS_stat)
 
 benchmark = 7.8
-diff_prediction_benchmark = benchmark - prediction_Q22014
-chance_observing_higher = norm.cdf(diff_prediction_benchmark, loc = 0, scale =np.sqrt(var_residuals ))
-print("Chance of observing difference of ", diff_prediction_benchmark)
+diff_prediction_benchmark = np.round(benchmark - prediction_Q22014,1)
+
+diff_prediction_benchmark = np.round(benchmark - prediction_Q22014,1)
+chance_observing_higher = norm.cdf(diff_prediction_benchmark, loc = 0, scale =stdev_residuals)
+print("Chance of observing value below ", diff_prediction_benchmark)
 print(chance_observing_higher)
 
 
@@ -256,11 +277,11 @@ def combine_ADL_AR_prediction(n_periods_needed, n_forward_predictions, ADL_model
     df_predictions  = df.copy(deep=True)
     df_predictions= df.tail(n_periods_needed)
     df_predictions.loc[n_periods_needed + 1] = [np.nan,np.nan,np.nan]
-
-    print(df_predictions)
-
+    df_predictions = df_predictions.reset_index()
+    df_predictions = df_predictions.drop("index", axis = 1)
+    
     # df for AR model
-    df_GDPQR = df['GDP_QGR']
+    df_GDPQR = df_predictions['GDP_QGR'].copy(deep = True)
     start_append_df = len(df_predictions.index)
 
     # add time to each
@@ -269,29 +290,172 @@ def combine_ADL_AR_prediction(n_periods_needed, n_forward_predictions, ADL_model
 
 
     # check how many predictions
-    for i in range(0,n_forward_predictions):
+    for i in range(0,n_forward_predictions+1):
 
         # get X_t from AR
         X_t_fromAR = AR_model.predict(df_GDPQR).iloc[-1]
 
         # update for AR prediction
-        df_GDPQR.loc[start_append_df + i] = X_t_fromAR
+        df_GDPQR.loc[start_append_df + i - 1] = X_t_fromAR
+        df_GDPQR.loc[start_append_df + i] = np.nan
+        
 
         # get Y_t
         y_t_fromADL = ADL_model.predict(df_predictions).iloc[-1]
+        
 
         # update for next one
         prev_date = prev_date + three_mon_rel
         row_to_add = [prev_date, X_t_fromAR, y_t_fromADL]
-        print(start_append_df + i-1)
         df_predictions.loc[start_append_df + i-1] = row_to_add
-
-        print("---")
-        print(df_predictions)
-
-
-    return df_predictions
+        df_predictions.loc[start_append_df + i] = [np.nan, np.nan, np.nan]
 
 
 
-combine_ADL_AR_prediction(3, 9, result_adl_UNRATE, result_ar_GDP,df)
+ 
+
+    return df_predictions.dropna(), df_GDPQR
+
+
+df_predictions, df_GDPQR_pred = combine_ADL_AR_prediction(3, 8, result_adl_UNRATE, result_ar_GDP,df)
+df_predictions.to_latex()
+df_GDPQR_pred
+
+df_predictions['UN_RATE_PRED'] = df_predictions['UN_RATE']
+df_predictions.loc[df_predictions['obs']< '2014-01-01','UN_RATE_PRED'] = np.nan
+df_predictions.loc[df_predictions['obs']> '2014-01-01','UN_RATE'] = np.nan
+
+
+plt.plot(df_predictions['obs'], df_predictions['UN_RATE'], 'b', label = 'Observed')
+plt.plot(df_predictions['obs'],df_predictions['UN_RATE_PRED'], 'r--', label = 'Predicted')
+plt.xticks(rotation=90)
+plt.ylabel("Unemployment Rate (%)")
+plt.legend(loc="upper right")
+plt.show()
+
+
+### Floris attempt at IRF
+
+negative_shock = -2
+positive_shock = 2
+
+df_IRF_neg = df.copy(deep = True)
+df_IRF_pos = df.copy(deep = True)
+df_IRF_pos
+
+
+GDP_QGR_Q12014 = float(df['GDP_QGR'].tail(1))
+
+df_IRF_neg.iloc[-1, df_IRF_neg.columns.get_loc('GDP_QGR')] = GDP_QGR_Q12014 + negative_shock
+df_IRF_pos.iloc[-1, df_IRF_pos.columns.get_loc('GDP_QGR')] = GDP_QGR_Q12014 + positive_shock
+
+
+df_predictions_negativeShock = combine_ADL_AR_prediction(3, 8, result_adl_UNRATE, result_ar_GDP,df_IRF_neg)
+df_predictions_positiveShock = combine_ADL_AR_prediction(3, 8, result_adl_UNRATE, result_ar_GDP,df_IRF_pos)
+
+df_predication_scenarios = df_predictions.copy(deep = True)
+df_predication_scenarios['UN_RATE_PRED_NEG_SHOCK'] = df_predictions_negativeShock['UN_RATE']
+df_predication_scenarios['UN_RATE_PRED_POS_SHOCK'] = df_predictions_positiveShock['UN_RATE']
+df_predication_scenarios.loc[df_predictions['obs']< '2014-01-01','UN_RATE_PRED_NEG_SHOCK'] = np.nan
+df_predication_scenarios.loc[df_predictions['obs']< '2014-01-01','UN_RATE_PRED_POS_SHOCK'] = np.nan
+
+
+plt.plot(df_predication_scenarios['obs'], df_predication_scenarios['UN_RATE'], 'b', label = 'Observed')
+plt.plot(df_predication_scenarios['obs'],df_predication_scenarios['UN_RATE_PRED'], 'r--', label = 'Predicted')
+plt.plot(df_predication_scenarios['obs'],df_predication_scenarios['UN_RATE_PRED_NEG_SHOCK'], 'g--', label = 'Predicted - negative shock')
+plt.plot(df_predication_scenarios['obs'],df_predication_scenarios['UN_RATE_PRED_POS_SHOCK'], 'y--', label = 'Predicted - negative shock')
+plt.xticks(rotation=90)
+plt.ylabel("Unemployment Rate (%)")
+plt.legend(loc="lower left")
+plt.show()
+
+
+## Question 6: IRF
+# Start with the AR(...):
+
+phi_1 = result_adl_UNRATE.params[1]
+phi_3 = result_adl_UNRATE.params[2]
+beta_1 = result_adl_UNRATE.params[3]
+sum_phi_1_phi_3 = phi_1 + phi_3
+alpha = result_adl_UNRATE.params[0]
+
+gamma_1 = result_ar_GDP.params[1]
+gamma_3 = result_ar_GDP.params[2]
+
+
+def irf_x(length, origin_x, shock_x, new_index):
+    # derivatives
+    dxs = np.empty(length)
+    dxs[0] = 1
+    dxs[1] = gamma_1*dxs[0]
+    dxs[2] = gamma_1*dxs[1]
+    dxs[3] = (gamma_1*dxs[2] + gamma_3*dxs[0])
+    
+    for i in range(4,length):
+        dxs[i] = gamma_1*dxs[i-1] + gamma_3*dxs[i-3]
+        
+    # construct irf
+    irf = np.empty(length)
+    for i in range(0,length):
+        irf[i] = dxs[i]*shock_x + origin_x
+    
+    irf = pd.Series(irf)
+    irf = irf.reindex(new_index)
+    irf[-1] = origin_x
+    return dxs, irf
+
+
+def irf_y(length, origin_y, shock_y, dxs, new_index):
+    # derivatives
+    dys = np.empty(length)
+    dys[0] = 0
+    dys[1] = beta_1
+    dys[2] = phi_1*dys[1] + beta_1 * dxs[1]
+    dys[3] = phi_1*dys[2] + phi_3*dys[0] + beta_1*dxs[2]
+    
+    for i in range(4,length):
+        dys[i] = phi_1*dys[i-1] + phi_3*dys[i-3] + beta_1*dxs[i]
+    
+    # construct irf
+    irf = np.empty(length)
+    for i in range(0,length):
+        irf[i] = dys[i]*shock_y + origin_y
+    
+    irf = pd.Series(irf)
+    irf = irf.reindex(new_index)
+    irf[-1] = origin_y
+    return dys, irf
+
+
+# constants:
+irf_length = 50
+origin_x = -0.37
+shock_x_good = 2.0
+shock_x_bad = -2.0
+shock_y = 1.0
+origin_y = 7.8
+new_index = [*range(-1,irf_length)]
+
+dxs_good, irf_x_good = irf_x(irf_length, origin_x, shock_x_good, new_index)
+dys_good, irf_y_good = irf_y(irf_length, origin_y, shock_x_good, dxs_good, new_index)
+
+# plot good shock:
+fig, axs = plt.subplots(2, sharex=True)
+axs[0].plot(irf_x_good)
+axs[0].set_title('GDP QGR IRF for positive shock in GDP QGR')
+axs[1].plot(irf_y_good)
+axs[1].set_title('Unemployment IRF for positive shock in GDP QGR')
+plt.xlabel('Periods after shock')
+plt.show()
+
+dxs_bad, irf_x_bad = irf_x(irf_length, origin_x, shock_x_bad, new_index)
+dys_bad, irf_y_bad= irf_y(irf_length, origin_y, shock_x_bad, dxs_bad, new_index)
+
+# plot bad shock:
+fig, axs = plt.subplots(2)
+axs[0].plot(irf_x_bad)
+axs[0].set_title('GDP QGR IRF for negative shock in GDP QGR')
+axs[1].plot(irf_y_bad)
+axs[1].set_title('Unemployment IRF for negative shock in GDP QGR')
+plt.xlabel('Periods after shock')
+plt.show()
