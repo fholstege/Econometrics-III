@@ -13,23 +13,6 @@ df = pd.read_csv('data_assign_p1.csv')
 df['obs'] = pd.to_datetime(df['obs'])
 df = df.set_index('obs')
 
-x=robjects.r('''
-        # create a function `f`
-        f <- function(r, verbose=FALSE) {
-            if (verbose) {
-                cat("I am calling f().\n")
-            }
-            2 * pi * r
-        }
-        # call the function `f` with argument value 3
-        f(3)
-        ''')
-
-
-
-
-
-
 
 ## Question 1:
 # General plot:
