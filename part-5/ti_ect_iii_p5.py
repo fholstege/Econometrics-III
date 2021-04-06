@@ -1,4 +1,4 @@
-# Econometrics III - Part 5
+### Econometrics III - Part 5
 
 # Imports Python:
 import pandas as pd
@@ -9,6 +9,7 @@ from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.stattools import coint
 from statsmodels.tsa.arima.model import ARIMA
 from pandas.tseries.offsets import DateOffset
+from stargazer.stargazer import Stargazer, LineLocation
 
 # Plot style:
 plt.style.use('ggplot')
@@ -112,6 +113,7 @@ model = ARIMA(df['New Cases'],
                           freq=DateOffset(days=1),
                           trend='n').fit(method='innovations_mle')
 
+print(model.summary().as_latex())
 
 #%% Model validation
 
@@ -130,19 +132,26 @@ plt.show()
 
 #%% Model forecast
 
+# Get forecast result object and put in seperate df:
 forecast_results = model.get_forecast(steps=14) # 2 weeks ahead forecast
 df_forecast = forecast_results.conf_int(alpha=0.05)
 df_forecast['Point Estimate'] = forecast_results.predicted_mean
 
-plt.plot(df_forecast['Point Estimate'], color='k', label='Forecast')
-plt.plot(df_forecast['upper New Cases'], color='r',
-         label='95% Confidence Bounds', linestyle='--')
-plt.plot(df_forecast['lower New Cases'], color='r', linestyle='--')
-plt.xlabel('Time')
-plt.ylabel('New Cases')
-plt.title('Two week ahead forecast of US daily new Covid-19 cases')
+# Adjust data set:
+df = df.append(df_forecast)
+df['Point Estimate'].loc['2021-02-24'] = df['New Cases'].loc['2021-02-24']
+df['lower New Cases'].loc['2021-02-24'] = df['New Cases'].loc['2021-02-24']
+df['upper New Cases'].loc['2021-02-24'] = df['New Cases'].loc['2021-02-24']
+
+# Combine forecast and actual plot:
+plt.plot(df['New Cases'].iloc[330:], label='Actual')
+plt.plot(df['Point Estimate'].iloc[330:], color='k',linestyle='-',
+         label='Point Estimate')
+plt.plot(df['lower New Cases'].iloc[330:], color='k',linestyle='--')
+plt.plot(df['upper New Cases'].iloc[330:], color='k',linestyle='--',
+         label='95% Confidence bounds')
 plt.legend()
+plt.xlabel('Time')
+plt.ylabel('Cases')
+plt.title('Forecast New Covid-19 Cases')
 plt.show()
-
-
-
